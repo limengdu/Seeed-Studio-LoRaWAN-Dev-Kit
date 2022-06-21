@@ -1,6 +1,7 @@
-#include"LIS3DHTR.h"
+#include <Arduino.h>
 #include <SoftwareSerial.h>
-LIS3DHTR<TwoWire> lis;
+#include "sensirion_common.h"
+#include "sgp30.h"
  
 SoftwareSerial mySerial(A0, A1); // RX, TX
  
@@ -81,15 +82,24 @@ void setup(void)
 { 
     Serial.begin(115200);
     mySerial.begin(9600);
-    lis.begin(Wire1);
-    if (!lis){
-      Serial.println("ERROR");
-      while(1);
-    }
-    lis.setOutputDataRate(LIS3DHTR_DATARATE_25HZ); //Data output rate
-    lis.setFullScaleRange(LIS3DHTR_RANGE_2G); //Scale range set to 2g
+    s16 err;
+    u32 ah = 0;
+    u16 scaled_ethanol_signal, scaled_h2_signal;
     delay(5000);
     Serial.print("E5 LORAWAN TEST\r\n");
+    while (sgp_probe() != STATUS_OK) {
+        Serial.println("SGP failed");
+        while (1);
+    }
+    err = sgp_measure_signals_blocking_read(&scaled_ethanol_signal,
+                                            &scaled_h2_signal);
+    if (err == STATUS_OK) {
+        Serial.println("get ram signal!");
+    } else {
+        Serial.println("error reading signals");
+    }
+    sgp_set_absolute_humidity(13000);
+    err = sgp_iaq_init();
  
     if (at_send_check_response("+AT: OK", 100, "AT\r\n"))
     {
@@ -114,14 +124,9 @@ void setup(void)
  
 void loop(void)
 {
-    float x_values, y_values, z_values;
-    int x, y, z;
-    x_values = lis.getAccelerationX();
-    y_values = lis.getAccelerationY();
-    z_values = lis.getAccelerationZ();
-    x = x_values*100;
-    y = y_values*100;
-    z = z_values*100;
+    s16 err = 0;
+    u16 tvoc_ppb, co2_eq_ppm;
+    err = sgp_measure_iaq_blocking_read(&tvoc_ppb, &co2_eq_ppm);
     if (is_exist){
         int ret = 0;
         if (is_join){
@@ -136,14 +141,16 @@ void loop(void)
             }
         }
         else{
-            char cmd1[128];
-            sprintf(cmd1, "AT+CMSGHEX=\"%08X %08X %08X\"\r\n", x, y, z);
-            ret = at_send_check_response("Done", 10000, cmd1);
+            char cmd[128];
+            sprintf(cmd, "AT+CMSGHEX=\"%04X %04X\"\r\n", tvoc_ppb, co2_eq_ppm);
+            ret = at_send_check_response("Done", 10000, cmd);
             if (ret){
-              Serial.print("X: "); Serial.print(x_values);
-              Serial.print(" Y: "); Serial.print(y_values);
-              Serial.print(" Z: "); Serial.print(z_values);
-              Serial.println();
+              Serial.print("tVOC  Concentration:");
+              Serial.print(tvoc_ppb);
+              Serial.println("ppb");
+              Serial.print("CO2eq Concentration:");
+              Serial.print(co2_eq_ppm);
+              Serial.println("ppm");
               recv_prase(recv_buf);
             }
             else{
