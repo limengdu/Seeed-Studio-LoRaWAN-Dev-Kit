@@ -86,12 +86,12 @@ void setup(void)
     if (at_send_check_response("+AT: OK", 100, "AT\r\n"))
     {
         is_exist = true;
-        at_send_check_response("+ID: DevEui", 1000, "AT+ID=DevEui,\"2CF7F1203230A49F\"\r\n");
-        at_send_check_response("+ID: AppEui", 1000, "AT+ID=AppEui,\"8000000000000006\"\r\n");
+        at_send_check_response("+ID: DevEui", 1000, "AT+ID=DevEui,\"2CF7FXXXXXX0A49F\"\r\n");
+        at_send_check_response("+ID: AppEui", 1000, "AT+ID=AppEui,\"8000XXXXXX000006\"\r\n");
         at_send_check_response("+MODE: LWOTAA", 1000, "AT+MODE=LWOTAA\r\n");
         at_send_check_response("+DR: EU868", 1000, "AT+DR=EU868\r\n");
         at_send_check_response("+CH: NUM", 1000, "AT+CH=NUM,0-2\r\n");
-        at_send_check_response("+KEY: APPKEY", 1000, "AT+KEY=APPKEY,\"2B7E151628AED2A6ABF7158809CF4F3C\"\r\n");
+        at_send_check_response("+KEY: APPKEY", 1000, "AT+KEY=APPKEY,\"2B7E151628XXXXXXXXXX158809CF4F3C\"\r\n");
         at_send_check_response("+CLASS: A", 1000, "AT+CLASS=A\r\n");
         at_send_check_response("+PORT: 8", 1000, "AT+PORT=8\r\n");
         delay(200);
