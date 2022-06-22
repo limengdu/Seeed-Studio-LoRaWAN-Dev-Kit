@@ -1,8 +1,11 @@
-#include"LIS3DHTR.h"
 #include <SoftwareSerial.h>
-LIS3DHTR<TwoWire> lis;
+#include <Arduino.h>
+#include <SensirionI2CSht4x.h>
+#include <Wire.h>
  
 SoftwareSerial mySerial(A0, A1); // RX, TX
+
+SensirionI2CSht4x sht4x;
  
 static char recv_buf[512];
 static bool is_exist = false;
@@ -81,14 +84,26 @@ void setup(void)
 { 
     Serial.begin(115200);
     mySerial.begin(9600);
-    lis.begin(Wire1);
-    if (!lis){
-      Serial.println("ERROR");
-      while(1);
-    }
-    lis.setOutputDataRate(LIS3DHTR_DATARATE_25HZ); //Data output rate
-    lis.setFullScaleRange(LIS3DHTR_RANGE_2G); //Scale range set to 2g
+
+    Wire.begin();
+
+    uint16_t error;
+    char errorMessage[256];
+
+    sht4x.begin(Wire);
+
+    uint32_t serialNumber;
+    error = sht4x.serialNumber(serialNumber);
     delay(5000);
+    if (error) {
+        Serial.print("Error trying to execute serialNumber(): ");
+        errorToString(error, errorMessage, 256);
+        Serial.println(errorMessage);
+    } else {
+        Serial.print("Serial Number: ");
+        Serial.println(serialNumber);
+    }
+    
     Serial.print("E5 LORAWAN TEST\r\n");
  
     if (at_send_check_response("+AT: OK", 100, "AT\r\n"))
@@ -114,14 +129,13 @@ void setup(void)
  
 void loop(void)
 {
-    float x_values, y_values, z_values;
-    int x, y, z;
-    x_values = lis.getAccelerationX();
-    y_values = lis.getAccelerationY();
-    z_values = lis.getAccelerationZ();
-    x = x_values*100;
-    y = y_values*100;
-    z = z_values*100;
+    uint16_t error;
+    float temperature, humidity;
+    int int_temp, int_humi;
+    error = sht4x.measureHighPrecision(temperature, humidity);
+    int_temp = temperature*100;
+    int_humi = humidity*100;
+    
     if (is_exist){
         int ret = 0;
         if (is_join){
@@ -136,14 +150,15 @@ void loop(void)
             }
         }
         else{
-            char cmd1[128];
-            sprintf(cmd1, "AT+CMSGHEX=\"%08X %08X %08X\"\r\n", x, y, z);
-            ret = at_send_check_response("Done", 10000, cmd1);
+            char cmd[128];
+            sprintf(cmd, "AT+CMSGHEX=\"%08X %08X\"\r\n", int_temp, int_humi);
+            ret = at_send_check_response("Done", 10000, cmd);
             if (ret){
-              Serial.print("X: "); Serial.print(x_values);
-              Serial.print(" Y: "); Serial.print(y_values);
-              Serial.print(" Z: "); Serial.print(z_values);
-              Serial.println();
+              Serial.print("Temperature:");
+              Serial.print(temperature);
+              Serial.print("\t");
+              Serial.print("Humidity:");
+              Serial.println(humidity);
               recv_prase(recv_buf);
             }
             else{

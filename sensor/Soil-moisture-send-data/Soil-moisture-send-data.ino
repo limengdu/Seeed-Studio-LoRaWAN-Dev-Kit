@@ -1,12 +1,12 @@
-#include"LIS3DHTR.h"
 #include <SoftwareSerial.h>
-LIS3DHTR<TwoWire> lis;
- 
-SoftwareSerial mySerial(A0, A1); // RX, TX
+
+SoftwareSerial mySerial(SCL, SDA); // RX, TX
  
 static char recv_buf[512];
 static bool is_exist = false;
 static bool is_join = false;
+int sensorPin = A0;
+int sensorValue = 0;
  
 static int at_send_check_response(char *p_ack, int timeout_ms, char *p_cmd, ...)
 {
@@ -81,13 +81,6 @@ void setup(void)
 { 
     Serial.begin(115200);
     mySerial.begin(9600);
-    lis.begin(Wire1);
-    if (!lis){
-      Serial.println("ERROR");
-      while(1);
-    }
-    lis.setOutputDataRate(LIS3DHTR_DATARATE_25HZ); //Data output rate
-    lis.setFullScaleRange(LIS3DHTR_RANGE_2G); //Scale range set to 2g
     delay(5000);
     Serial.print("E5 LORAWAN TEST\r\n");
  
@@ -114,14 +107,7 @@ void setup(void)
  
 void loop(void)
 {
-    float x_values, y_values, z_values;
-    int x, y, z;
-    x_values = lis.getAccelerationX();
-    y_values = lis.getAccelerationY();
-    z_values = lis.getAccelerationZ();
-    x = x_values*100;
-    y = y_values*100;
-    z = z_values*100;
+    sensorValue = analogRead(sensorPin);
     if (is_exist){
         int ret = 0;
         if (is_join){
@@ -136,14 +122,12 @@ void loop(void)
             }
         }
         else{
-            char cmd1[128];
-            sprintf(cmd1, "AT+CMSGHEX=\"%08X %08X %08X\"\r\n", x, y, z);
-            ret = at_send_check_response("Done", 10000, cmd1);
+            char cmd[128];
+            sprintf(cmd, "AT+CMSGHEX=\"%04X\"\r\n", sensorValue);
+            ret = at_send_check_response("Done", 10000, cmd);
             if (ret){
-              Serial.print("X: "); Serial.print(x_values);
-              Serial.print(" Y: "); Serial.print(y_values);
-              Serial.print(" Z: "); Serial.print(z_values);
-              Serial.println();
+              Serial.print("Moisture = " );
+              Serial.println(sensorValue);
               recv_prase(recv_buf);
             }
             else{
