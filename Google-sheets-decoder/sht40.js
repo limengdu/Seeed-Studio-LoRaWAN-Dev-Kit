@@ -2,16 +2,17 @@ function Decoder(bytes, port) {
     var decoded = {};
 
     function transformers(bytes) {
-        if (bytes[0] == 255 || bytes[0] == 0) {
-            value = bytes[2] * 256 + bytes[3];
-            value = value / 100.0;
-        }
-        return value;
+      value = bytes[0] * 256 + bytes[1];
+      if (value >= 32768) {
+        value = 32768 - value;
+      }
+      value = value/100.0;
+      return value;
     }
 
     if (port == 8) {
-        decoded.temp = transformers(bytes.slice(0, 4));
-        decoded.humi = transformers(bytes.slice(4, 8));
+        decoded.temp = transformers(bytes.slice(0, 2));
+        decoded.humi = transformers(bytes.slice(2, 4));
     }
 
     // TODO: Transform bytes to decoded payload below
@@ -44,10 +45,3 @@ return str.join("&");
 }
 // DO NOT REMOVE: Google Form Function
     
-
-
-
-
-
-
-
