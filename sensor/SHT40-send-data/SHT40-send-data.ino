@@ -22,10 +22,11 @@ DSKLORAE5_ZONE_KR920
 DSKLORAE5_ZONE_IN865
 DSKLORAE5_ZONE_AU915
  */
+ 
+char deveui[] = "2CF7FXXXXXX0A49F";
+char appeui[] = "80000XXXXXX00009";
+char appkey[] = "2B7E151628XXXXXXXXXX158809CF4F3C";
 
-char deveui[] = "2CF7F1203230A49F";
-char appeui[] = "8000000000000006";
-char appkey[] = "2B7E151628AED2A6ABF7158809CF4F3C";
  
 void data_decord(int val_1, int val_2, uint8_t data[4])
 {
