@@ -1,143 +1,84 @@
-#include <SoftwareSerial.h>
+#include <Arduino.h>
+#include "disk91_LoRaE5.h"
 
-SoftwareSerial mySerial(SCL, SDA); // RX, TX
- 
-static char recv_buf[512];
-static bool is_exist = false;
-static bool is_join = false;
 int sensorPin = A0;
 int sensorValue = 0;
- 
-static int at_send_check_response(char *p_ack, int timeout_ms, char *p_cmd, ...)
-{
-    int ch;
-    int num = 0;
-    int index = 0;
-    int startMillis = 0;
-    va_list args;
-    memset(recv_buf, 0, sizeof(recv_buf));
-    va_start(args, p_cmd);
-    mySerial.printf(p_cmd, args);
-    Serial.printf(p_cmd, args);
-    va_end(args);
-    delay(200);
-    startMillis = millis();
- 
-    if (p_ack == NULL)
-    {
-        return 0;
-    }
- 
-    do
-    {
-        while (mySerial.available() > 0)
-        {
-            ch = mySerial.read();
-            recv_buf[index++] = ch;
-            Serial.print((char)ch);
-            delay(2);
-        }
- 
-        if (strstr(recv_buf, p_ack) != NULL)
-        {
-            return 1;
-        }
- 
-    } while (millis() - startMillis < timeout_ms);
-    return 0;
+
+Disk91_LoRaE5 lorae5(&Serial); // Where the AT command and debut traces are printed
+
+#define Frequency DSKLORAE5_ZONE_EU868
+/*
+Select your frequency band here.
+DSKLORAE5_ZONE_EU868
+DSKLORAE5_ZONE_US915
+DSKLORAE5_ZONE_AS923_1
+DSKLORAE5_ZONE_AS923_2
+DSKLORAE5_ZONE_AS923_3
+DSKLORAE5_ZONE_AS923_4
+DSKLORAE5_ZONE_KR920
+DSKLORAE5_ZONE_IN865
+DSKLORAE5_ZONE_AU915
+ */
+
+char deveui[] = "2CF7F1203230A49F";
+char appeui[] = "8000000000000006";
+char appkey[] = "2B7E151628AED2A6ABF7158809CF4F3C";
+
+void data_decord(int val, uint8_t data[2])
+{ 
+  data[0] = val >> 8 & 0xFF;
+  data[1] = val & 0xFF;
 }
- 
-static void recv_prase(char *p_msg)
-{
-    if (p_msg == NULL)
-    {
-        return;
-    }
-    char *p_start = NULL;
-    int data = 0;
-    int rssi = 0;
-    int snr = 0;
- 
-    p_start = strstr(p_msg, "RX");
-    if (p_start && (1 == sscanf(p_start, "RX: \"%d\"\r\n", &data)))
-    {
-        Serial.println(data);
-    }
- 
-    p_start = strstr(p_msg, "RSSI");
-    if (p_start && (1 == sscanf(p_start, "RSSI %d,", &rssi)))
-    {
-        Serial.println(rssi);
-    }
- 
-    p_start = strstr(p_msg, "SNR");
-    if (p_start && (1 == sscanf(p_start, "SNR %d", &snr)))
-    {
-        Serial.println(snr);
-    }
-}
- 
+
 void setup(void)
 { 
-    Serial.begin(115200);
-    mySerial.begin(9600);
-    delay(5000);
-    Serial.print("E5 LORAWAN TEST\r\n");
- 
-    if (at_send_check_response("+AT: OK", 100, "AT\r\n"))
-    {
-        is_exist = true;
-        at_send_check_response("+ID: DevEui", 1000, "AT+ID=DevEui,\"2CF7FXXXXXX0A49F\"\r\n");
-        at_send_check_response("+ID: AppEui", 1000, "AT+ID=AppEui,\"8000XXXXXX000006\"\r\n");
-        at_send_check_response("+MODE: LWOTAA", 1000, "AT+MODE=LWOTAA\r\n");
-        at_send_check_response("+DR: EU868", 1000, "AT+DR=EU868\r\n");
-        at_send_check_response("+CH: NUM", 1000, "AT+CH=NUM,0-2\r\n");
-        at_send_check_response("+KEY: APPKEY", 1000, "AT+KEY=APPKEY,\"2B7E151628XXXXXXXXXX158809CF4F3C\"\r\n");
-        at_send_check_response("+CLASS: A", 1000, "AT+CLASS=A\r\n");
-        at_send_check_response("+PORT: 8", 1000, "AT+PORT=8\r\n");
-        delay(200);
-        is_join = true;
-    }
-    else
-    {
-        is_exist = false;
-        Serial.print("No E5 module found.\r\n");
-    }
+  Serial.begin(9600);
+  uint32_t start = millis();
+  while ( !Serial && (millis() - start) < 1500 );  // Open the Serial Monitor to get started or wait for 1.5"
+  // init the library, search the LORAE5 over the different WIO port available
+  if ( ! lorae5.begin(DSKLORAE5_SWSERIAL_WIO_P1) ) {
+    Serial.println("LoRa E5 Init Failed");
+    while(1); 
+  }
+
+  // Setup the LoRaWan Credentials
+  if ( ! lorae5.setup(
+        Frequency,
+        deveui,
+        appeui,
+        appkey
+     ) ){
+    Serial.println("LoRa E5 Setup Failed");
+    while(1);         
+  }
 }
  
 void loop(void)
 {
-    sensorValue = analogRead(sensorPin);
-    if (is_exist){
-        int ret = 0;
-        if (is_join){
-            ret = at_send_check_response("+JOIN: Network joined", 12000, "AT+JOIN\r\n");
-            if (ret){
-              is_join = false;
-            }
-            else{
-                Serial.println("");
-                Serial.print("JOIN failed!\r\n\r\n");
-                delay(5000);
-            }
+  sensorValue = analogRead(sensorPin);
+
+  Serial.print("Soil Moisture: "); Serial.println(sensorValue);
+
+  static uint8_t data[2] = { 0x00 };  //Use the data[] to store the values of the sensors
+
+  data_decord(sensorValue, data);
+
+  if ( lorae5.send_sync(              //Sending the sensor values out
+        8,                            // LoRaWan Port
+        data,                         // data array
+        sizeof(data),                 // size of the data
+        false,                        // we are not expecting a ack
+        7,                            // Spread Factor
+        14                            // Tx Power in dBm
+       ) 
+  ) {
+      Serial.println("Uplink done");
+      if ( lorae5.isDownlinkReceived() ) {
+        Serial.println("A downlink has been received");
+        if ( lorae5.isDownlinkPending() ) {
+          Serial.println("More downlink are pending");
         }
-        else{
-            char cmd[128];
-            sprintf(cmd, "AT+CMSGHEX=\"%04X\"\r\n", sensorValue);
-            ret = at_send_check_response("Done", 10000, cmd);
-            if (ret){
-              Serial.print("Moisture = " );
-              Serial.println(sensorValue);
-              recv_prase(recv_buf);
-            }
-            else{
-              Serial.print("Send failed!\r\n\r\n");
-            }
-            delay(5000);
-        }
-    }
-    else
-    {
-      delay(1000);
-    }
+      }
+  }
+  delay(15000);
 }

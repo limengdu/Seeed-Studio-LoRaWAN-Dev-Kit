@@ -1,73 +1,50 @@
 #include <Arduino.h>
-#include <SoftwareSerial.h>
+#include "disk91_LoRaE5.h"
 
-//Grove LoRa E5 to Grove connector on the right side of the Wio Terminal
-SoftwareSerial mySerial(A0, A1); // RX, TX
+Disk91_LoRaE5 lorae5(&Serial); // Where the AT command and debut traces are printed
 
-//Grove LoRa E5 to Grove connector on the left side of the Wio Terminal
-//SoftwareSerial mySerial(SCL, SDA); // RX, TX
- 
-static char recv_buf[512];
- 
-static int at_send_check_response(char *p_ack, int timeout_ms, char *p_cmd, ...)
-{
-    int ch;
-    int num = 0;
-    int index = 0;
-    int startMillis = 0;
-    va_list args;
-    memset(recv_buf, 0, sizeof(recv_buf));
-    va_start(args, p_cmd);
-    mySerial.printf(p_cmd, args);
-    Serial.printf(p_cmd, args);
-    va_end(args);
-    delay(200);
-    startMillis = millis();
- 
-    if (p_ack == NULL)
-    {
-        return 0;
-    }
- 
-    do
-    {
-        while (mySerial.available() > 0)
-        {
-            ch = mySerial.read();
-            recv_buf[index++] = ch;
-            Serial.print((char)ch);
-            delay(2);
-        }
- 
-        if (strstr(recv_buf, p_ack) != NULL)
-        {
-            return 1;
-        }
- 
-    } while (millis() - startMillis < timeout_ms);
-    return 0;
+#define Frequency DSKLORAE5_ZONE_EU868
+/*
+Select your frequency band here.
+DSKLORAE5_ZONE_EU868
+DSKLORAE5_ZONE_US915
+DSKLORAE5_ZONE_AS923_1
+DSKLORAE5_ZONE_AS923_2
+DSKLORAE5_ZONE_AS923_3
+DSKLORAE5_ZONE_AS923_4
+DSKLORAE5_ZONE_KR920
+DSKLORAE5_ZONE_IN865
+DSKLORAE5_ZONE_AU915
+ */
+
+char deveui[] = "2CF7FXXXXXX0A49F";
+char appeui[] = "80000XXXXXX00009";
+char appkey[] = "2B7E151628XXXXXXXXXX158809CF4F3C";
+
+void setup() {
+
+  Serial.begin(9600);
+  uint32_t start = millis();
+  while ( !Serial && (millis() - start) < 1500 );  // Open the Serial Monitor to get started or wait for 1.5"
+
+  // init the library, search the LORAE5 over the different WIO port available
+  if ( ! lorae5.begin(DSKLORAE5_SEARCH_WIO) ) {
+    Serial.println("LoRa E5 Init Failed");
+    while(1); 
+  }
+
+  // Setup the LoRaWan Credentials
+  if ( ! lorae5.setup(
+        Frequency,     // LoRaWan Radio Zone EU868 here
+        deveui,
+        appeui,
+        appkey
+     ) ){
+    Serial.println("LoRa E5 Setup Failed");
+    while(1);         
+  }
 }
- 
-void setup(void)
-{ 
-    Serial.begin(115200);
-    mySerial.begin(9600);
-    delay(5000);
-    Serial.print("Write Grove LoRa E5 triad information.\r\n");
-}
- 
-void loop(void)
-{
-    if (at_send_check_response("+AT: OK", 100, "AT\r\n"))
-    {
-        at_send_check_response("+ID: DevEui", 1000, "AT+ID=DevEui,\"2CF7FXXXXXX0A49F\"\r\n");
-        at_send_check_response("+ID: AppEui", 1000, "AT+ID=AppEui,\"8000XXXXXX000006\"\r\n");
-        at_send_check_response("+KEY: APPKEY", 1000, "AT+KEY=APPKEY,\"2B7E151628XXXXXXXXXX158809CF4F3C\"\r\n");
-        delay(200);
-    }
-    else
-    {
-        Serial.print("No Grove LoRa E5 module found.\r\n");
-    }
-    delay(10000);
+
+void loop() {
+
 }

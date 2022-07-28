@@ -1,72 +1,26 @@
 #include <Arduino.h>
-#include <SoftwareSerial.h>
+#include "disk91_LoRaE5.h"
 
-//Grove LoRa E5 to Grove connector on the right side of the Wio Terminal
-SoftwareSerial mySerial(A0, A1); // RX, TX
+Disk91_LoRaE5 lorae5(&Serial); // Where the AT command and debut traces are printed
 
-//Grove LoRa E5 to Grove connector on the left side of the Wio Terminal
-//SoftwareSerial mySerial(SCL, SDA); // RX, TX
- 
-static char recv_buf[512];
- 
-static int at_send_check_response(char *p_ack, int timeout_ms, char *p_cmd, ...)
-{
-    int ch;
-    int num = 0;
-    int index = 0;
-    int startMillis = 0;
-    va_list args;
-    memset(recv_buf, 0, sizeof(recv_buf));
-    va_start(args, p_cmd);
-    mySerial.printf(p_cmd, args);
-    Serial.printf(p_cmd, args);
-    va_end(args);
-    delay(200);
-    startMillis = millis();
- 
-    if (p_ack == NULL)
-    {
-        return 0;
-    }
- 
-    do
-    {
-        while (mySerial.available() > 0)
-        {
-            ch = mySerial.read();
-            recv_buf[index++] = ch;
-            Serial.print((char)ch);
-            delay(2);
-        }
- 
-        if (strstr(recv_buf, p_ack) != NULL)
-        {
-            return 1;
-        }
- 
-    } while (millis() - startMillis < timeout_ms);
-    return 0;
+void setup() {
+
+  Serial.begin(9600);
+  uint32_t start = millis();
+  while ( !Serial && (millis() - start) < 3000 );  // Open the Serial Monitor to get started or wait for 3.0"
+
+  // init the library, search the Wio-E5 over the different WIO port available
+  if ( ! lorae5.begin(DSKLORAE5_SEARCH_WIO) ) {
+    Serial.println("Wio-E5 Init Failed");
+    while(1); 
+  }
+
 }
- 
-void setup(void)
-{ 
-    Serial.begin(115200);
-    mySerial.begin(9600);
-    delay(5000);
-    Serial.print("Write Grove LoRa E5 triad information.\r\n");
-}
- 
-void loop(void)
-{
-    if (at_send_check_response("+AT: OK", 100, "AT\r\n"))
-    {
-        at_send_check_response("+ID: DevEui", 1000, "AT+ID=DevEui\r\n");
-        at_send_check_response("+ID: AppEui", 1000, "AT+ID=AppEui\r\n");
-        delay(200);
-    }
-    else
-    {
-        Serial.print("No Grove LoRa E5 module found.\r\n");
-    }
-    delay(10000);
+
+void loop() {
+  //Grove - Wio-E5 allows querying DevEUI, AppEUI, but not AppKey.
+  lorae5.sendATCommand("AT+ID=DevEui","","+ID: ERROR","",1000,false,NULL);
+  lorae5.sendATCommand("AT+ID=AppEUI","","+ID: ERROR","",1000,false,NULL);
+  delay(30000);
+
 }

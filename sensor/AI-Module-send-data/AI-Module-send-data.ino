@@ -1,213 +1,167 @@
-#include <SoftwareSerial.h>
+#include <Arduino.h>
+#include "disk91_LoRaE5.h"
 #include "Seeed_Arduino_GroveAI.h"
 #include <Wire.h>
+
 GroveAI ai(Wire);
 uint8_t state = 0;
 
-SoftwareSerial mySerial(A0, A1); // RX, TX
- 
-static char recv_buf[512];
-static bool is_exist = false;
-static bool is_join = false;
- 
-static int at_send_check_response(char *p_ack, int timeout_ms, char *p_cmd, ...)
-{
-    int ch;
-    int num = 0;
-    int index = 0;
-    int startMillis = 0;
-    va_list args;
-    memset(recv_buf, 0, sizeof(recv_buf));
-    va_start(args, p_cmd);
-    mySerial.printf(p_cmd, args);
-    Serial.printf(p_cmd, args);
-    va_end(args);
-    delay(200);
-    startMillis = millis();
- 
-    if (p_ack == NULL)
-    {
-        return 0;
-    }
- 
-    do
-    {
-        while (mySerial.available() > 0)
-        {
-            ch = mySerial.read();
-            recv_buf[index++] = ch;
-            Serial.print((char)ch);
-            delay(2);
-        }
- 
-        if (strstr(recv_buf, p_ack) != NULL)
-        {
-            return 1;
-        }
- 
-    } while (millis() - startMillis < timeout_ms);
-    return 0;
-}
- 
-static void recv_prase(char *p_msg)
-{
-    if (p_msg == NULL)
-    {
-        return;
-    }
-    char *p_start = NULL;
-    int data = 0;
-    int rssi = 0;
-    int snr = 0;
- 
-    p_start = strstr(p_msg, "RX");
-    if (p_start && (1 == sscanf(p_start, "RX: \"%d\"\r\n", &data)))
-    {
-        Serial.println(data);
-    }
- 
-    p_start = strstr(p_msg, "RSSI");
-    if (p_start && (1 == sscanf(p_start, "RSSI %d,", &rssi)))
-    {
-        Serial.println(rssi);
-    }
- 
-    p_start = strstr(p_msg, "SNR");
-    if (p_start && (1 == sscanf(p_start, "SNR %d", &snr)))
-    {
-        Serial.println(snr);
-    }
+Disk91_LoRaE5 lorae5(&Serial); // Where the AT command and debut traces are printed
+
+#define Frequency DSKLORAE5_ZONE_EU868
+/*
+Select your frequency band here.
+DSKLORAE5_ZONE_EU868
+DSKLORAE5_ZONE_US915
+DSKLORAE5_ZONE_AS923_1
+DSKLORAE5_ZONE_AS923_2
+DSKLORAE5_ZONE_AS923_3
+DSKLORAE5_ZONE_AS923_4
+DSKLORAE5_ZONE_KR920
+DSKLORAE5_ZONE_IN865
+DSKLORAE5_ZONE_AU915
+ */
+
+char deveui[] = "2CF7F1203230A49F";
+char appeui[] = "8000000000000006";
+char appkey[] = "2B7E151628AED2A6ABF7158809CF4F3C";
+
+void data_decord(int val_1, int val_2, uint8_t data[4])
+{ 
+  data[0] = val_1 >> 8 & 0xFF;
+  data[1] = val_1 & 0xFF;
+  data[2] = val_2 >> 8 & 0xFF;
+  data[3] = val_2 & 0xFF;
 }
 
 void setup(void)
 { 
-    Wire.begin();
-    Serial.begin(115200);
-    mySerial.begin(9600);
+  Wire.begin();
 
-    delay(5000);
-    Serial.print("E5 LORAWAN TEST\r\n");
+  Serial.begin(9600);
 
-    if (ai.begin(ALGO_OBJECT_DETECTION, MODEL_EXT_INDEX_1)) // Object detection and pre-trained model 1
-    {
-      Serial.print("Version: ");
-      Serial.println(ai.version());
-      Serial.print("ID: ");
-      Serial.println( ai.id());
-      Serial.print("Algo: ");
-      Serial.println( ai.algo());
-      Serial.print("Model: ");
-      Serial.println(ai.model());
-      Serial.print("Confidence: ");
-      Serial.println(ai.confidence());
-      state = 1;
-    }
-    else
-    {
-      Serial.println("Algo begin failed.");
-    }
+  uint32_t start = millis();
+  while ( !Serial && (millis() - start) < 1500 );  // Open the Serial Monitor to get started or wait for 1.5"
 
-    if (at_send_check_response("+AT: OK", 100, "AT\r\n"))
-    {
-        is_exist = true;
-        at_send_check_response("+ID: DevEui", 1000, "AT+ID=DevEui,\"2CF7FXXXXXX0A49F\"\r\n");
-        at_send_check_response("+ID: AppEui", 1000, "AT+ID=AppEui,\"8000XXXXXX000006\"\r\n");
-        at_send_check_response("+MODE: LWOTAA", 1000, "AT+MODE=LWOTAA\r\n");
-        at_send_check_response("+DR: EU868", 1000, "AT+DR=EU868\r\n");
-        at_send_check_response("+CH: NUM", 1000, "AT+CH=NUM,0-2\r\n");
-        at_send_check_response("+KEY: APPKEY", 1000, "AT+KEY=APPKEY,\"2B7E151628XXXXXXXXXX158809CF4F3C\"\r\n");
-        at_send_check_response("+CLASS: A", 1000, "AT+CLASS=A\r\n");
-        at_send_check_response("+PORT: 8", 1000, "AT+PORT=8\r\n");
-        delay(200);
-        is_join = true;
-    }
-    else
-    {
-        is_exist = false;
-        Serial.print("No E5 module found.\r\n");
-    }
+  if (ai.begin(ALGO_OBJECT_DETECTION, MODEL_EXT_INDEX_1)) // Object detection and pre-trained model 1
+  {
+    Serial.print("Version: ");
+    Serial.println(ai.version());
+    Serial.print("ID: ");
+    Serial.println( ai.id());
+    Serial.print("Algo: ");
+    Serial.println( ai.algo());
+    Serial.print("Model: ");
+    Serial.println(ai.model());
+    Serial.print("Confidence: ");
+    Serial.println(ai.confidence());
+    state = 1;
+  }
+  else
+  {
+    Serial.println("Algo begin failed.");
+  }
+
+  // init the library, search the LORAE5 over the different WIO port available
+  if ( ! lorae5.begin(DSKLORAE5_SWSERIAL_WIO_P2) ) {
+    Serial.println("LoRa E5 Init Failed");
+    while(1); 
+  }
+
+  // Setup the LoRaWan Credentials
+  if ( ! lorae5.setup(
+        Frequency,
+        deveui,
+        appeui,
+        appkey
+     ) ){
+    Serial.println("LoRa E5 Setup Failed");
+    while(1);         
+  }
 }
 
 void loop(void)
 {
-  if (is_exist)
+  static uint8_t data_val[4] = { 0x00 };  //Use the data[] to store the values of the sensors
+  
+  if (state == 1)
+  {
+    if (ai.invoke()) // begin invoke
     {
-        int ret = 0;
-        char cmd[128];
-        if (is_join)
+      while (1) // wait for invoking finished
+      {
+        CMD_STATE_T ret = ai.state(); 
+        if (ret == CMD_STATE_IDLE)
         {
-            ret = at_send_check_response("+JOIN: Network joined", 12000, "AT+JOIN\r\n");
-            if (ret)
-            {
-              is_join = false;
-            }
-            else
-            {
-                Serial.println("");
-                Serial.print("JOIN failed!\r\n\r\n");
-                delay(5000);
-            }
+          break;
         }
-        else
+        delay(20);
+      }
+      uint8_t len = ai.get_result_len(); // receive how many people detect
+      if(len)
+      {
+        Serial.print("Number of people: "); Serial.println(len);
+        object_detection_t data;       //get data
+    
+        for (int i = 0; i < len; i++)
         {
-          if (state == 1)
-          {
-            if (ai.invoke()) // begin invoke
-            {
-              while (1) // wait for invoking finished
-              {
-                CMD_STATE_T ret = ai.state(); 
-                if (ret == CMD_STATE_IDLE)
-                {
-                  break;
-                }
-                delay(20);
-              }
-            uint8_t len = ai.get_result_len(); // receive how many people detect
-            if(len)
-            {
-              Serial.print("Number of people: ");
-              Serial.println(len);
-              object_detection_t data;       //get data
-      
-              for (int i = 0; i < len; i++)
-              {
-                Serial.println("result:detected");
-                Serial.print("Detecting and calculating: ");
-                Serial.println(i+1);
-                ai.get_result(i, (uint8_t*)&data, sizeof(object_detection_t)); //get result
+          Serial.println("result:detected");
+          Serial.print("Detecting and calculating: ");
+          Serial.println(i+1);
+          ai.get_result(i, (uint8_t*)&data, sizeof(object_detection_t)); //get result
+    
+          Serial.print("confidence:"); Serial.println(data.confidence);
 
-                Serial.print("confidence:");
-                Serial.print(data.confidence);
-                Serial.println();
-                
-                sprintf(cmd, "AT+CMSGHEX=\"%04X %04X\"\r\n", len, data.confidence);
-                ret = at_send_check_response("Done", 10000, cmd);
-                if(!ret){
-                  break;
-                  Serial.print("Send failed!\r\n\r\n");
+          data_decord(len, data.confidence, data_val);
+          
+          if ( lorae5.send_sync(              //Sending the sensor values out
+                8,                            // LoRaWan Port
+                data_val,                     // data array
+                sizeof(data_val),             // size of the data
+                false,                        // we are not expecting a ack
+                7,                            // Spread Factor
+                14                            // Tx Power in dBm
+               ) 
+          ) {
+              Serial.println("Uplink done");
+              if ( lorae5.isDownlinkReceived() ) {
+                Serial.println("A downlink has been received");
+                if ( lorae5.isDownlinkPending() ) {
+                  Serial.println("More downlink are pending");
                 }
-                else{
-                  recv_prase(recv_buf);
-                }
               }
-            }
-              else
-              {
-                Serial.println("No identification");
-              }
-            }
-              else
-              {
-                delay(1000);
-                Serial.println("Invoke Failed.");
-              }
-             }
+          }
         }
+      }
+      else
+      {
+        Serial.println("No identification");
+        
+        data_decord(0, 0, data_val);
+        
+        if ( lorae5.send_sync(              //Sending the sensor values out
+              8,                            // LoRaWan Port
+              data_val,                     // data array
+              sizeof(data_val),             // size of the data
+              false,                        // we are not expecting a ack
+              7,                            // Spread Factor
+              14                            // Tx Power in dBm
+             ) 
+        ) {
+            Serial.println("Uplink done");
+            if ( lorae5.isDownlinkReceived() ) {
+              Serial.println("A downlink has been received");
+              if ( lorae5.isDownlinkPending() ) {
+                Serial.println("More downlink are pending");
+              }
+            }
+        }
+      }
     }
     else
     {
-        delay(1000);
+      Serial.println("Invoke Failed.");
     }
-    delay(500);
+  }
+  delay(14980);
 }
